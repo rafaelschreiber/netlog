@@ -2,4 +2,5 @@
 .DS_Store
 ._*
 server/__pycache__/
+libnetlog/__pycache__/
 server/logs/

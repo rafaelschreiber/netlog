@@ -1,13 +1,15 @@
 import socket
 import threading
 import json
+import os
 
 from functions import *
 from threading import Event
 
 VERSIONSTRING = "netlog server v0.1 alpha"
 connDict = { } # This dictionary contains all threaded user connections
-envDict = { "test":{"key":"12345678", "location":""} } # This dictionary contains all log environments
+envDict = { } # This dictionary contains all log environments
+CONFIGPATH = "/etc/netlog/environments.conf"
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -86,6 +88,19 @@ class Connection(threading.Thread):
                 self.exit("Connection closed by client")
                 return
 
+            elif data["type"] == "log":
+                if type(data["content"]) is not dict:
+                    self.exit("Protocol Missmatch")
+                    return
+                if not ("logfile" in data["content"].keys() and "logmsg" in data["content"].keys()):
+                    self.exit("Protocol Missmatch")
+                    return
+
+                with open(envDict[self._environment]["location"] + "/" + data["content"]["logfile"], "a+") as logfile:
+                    logfile.write(data["content"]["logmsg"])
+                    logfile.close()
+                self._send("ok", "Log written")
+
             else:
                 self.exit("Protocol Missmatch")
                 return
@@ -151,9 +166,36 @@ def acceptConnections():
         connectionCounter += 1
 
 
+def parseConfig():
+    global envDict
+    try:
+        with open(CONFIGPATH, 'r') as configfile:
+            try:
+                environments = json.loads(configfile.read())
+                configfile.close()
+            except json.JSONDecodeError:
+                configfile.close()
+                return False
+    except FileNotFoundError:
+        return False
+    return environments
+
+
+envDict = parseConfig()
+if not envDict:
+    print("Config file invalid or not found")
+    exit(1)
+
+for envs in envDict.keys():
+    try:
+        os.makedirs(envDict[envs]["location"])
+    except FileExistsError:
+        pass
+
 acceptConnectionsThread = threading.Thread(target=acceptConnections)
 acceptConnectionsThread.daemon = True
 acceptConnectionsThread.start()
+
 print("Started " + VERSIONSTRING + ". Listening for incoming connections...")
 
 try:
