@@ -64,7 +64,7 @@ class Netlog:
             raise ConnectionRefusedError("Protocol missmatch, maybe the server isn't running netlog")
 
     def log(self, file, message):
-        if self.env i None:
+        if self.env is None:
             return False
 
         if self._isdead:

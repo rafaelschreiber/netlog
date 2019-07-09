@@ -1,20 +1,49 @@
+#!/usr/bin/env python3
 import socket
 import threading
 import json
 import os
 
-from functions import *
 from threading import Event
+from time import localtime, strftime
 
 VERSIONSTRING = "netlog server v0.1 alpha"
 connDict = { } # This dictionary contains all threaded user connections
 envDict = { } # This dictionary contains all log environments
 CONFIGPATH = "/etc/netlog/environments.conf"
+sessiontimecode = strftime("%Y-%m-%d_%H-%M-%S", localtime())
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 server_socket.bind(("0.0.0.0", 4125))
 server_socket.listen(5)
+
+
+def Log(content, severity=0):
+    global sessiontimecode
+
+    current_time = "[" + strftime("%Y-%m-%d %H:%M:%S", localtime()) + "]"
+
+    if severity == 0 or severity == "info":
+        log = current_time + " !️  " + str(content)
+    elif severity == 1 or severity == "error":
+        log = current_time + " ✘  " + str(content)
+    elif severity == 2 or severity == "ok":
+        log = current_time + " ✔  " + str(content)
+    elif severity == -1 or severity == "debug":
+        log = current_time + " !! " + str(content)
+    else:
+        return
+
+
+    if not os.path.exists("/var/log/netlog"):
+        os.makedirs("/var/log/netlog")
+    with open("/var/log/netlog/log_" + sessiontimecode + ".txt", "a+") as file:
+        file.write(log + '\n')
+        print(log)
+        file.close()
+        os.system("ln -sf log_"  + sessiontimecode + ".txt /var/log/netlog/latest")
+
 
 class Connection(threading.Thread):
     def __init__(self, connection, address, iD):
@@ -96,6 +125,8 @@ class Connection(threading.Thread):
                     self.exit("Protocol Missmatch")
                     return
 
+                if not os.path.exists(envDict[self._environment]["location"]):
+                    os.makedirs(envDict[self._environment]["location"])
                 with open(envDict[self._environment]["location"] + "/" + data["content"]["logfile"], "a+") as logfile:
                     logfile.write(data["content"]["logmsg"])
                     logfile.close()
@@ -186,17 +217,11 @@ if not envDict:
     print("Config file invalid or not found")
     exit(1)
 
-for envs in envDict.keys():
-    try:
-        os.makedirs(envDict[envs]["location"])
-    except FileExistsError:
-        pass
-
 acceptConnectionsThread = threading.Thread(target=acceptConnections)
 acceptConnectionsThread.daemon = True
 acceptConnectionsThread.start()
 
-print("Started " + VERSIONSTRING + ". Listening for incoming connections...")
+Log("Started " + VERSIONSTRING + ". Listening for incoming connections...", 2)
 
 try:
     Event().wait() # a better more cpu efficient way to write while True: pass
