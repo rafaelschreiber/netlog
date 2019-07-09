@@ -31,7 +31,6 @@ class Connection(threading.Thread):
         self._send("welcome", VERSIONSTRING)
 
         data = self._recv()
-        print(data)
         if data is False:
             self.exit("Protocol Missmatch")
             return False
